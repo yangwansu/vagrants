@@ -1,0 +1,50 @@
+ENV["LC_ALL"] = "en_US.UTF-8"
+$node_ip="192.168.100.100"
+
+Vagrant.configure("2") do |config|
+
+  config.vagrant.plugins = "vagrant-docker-compose"
+
+  config.vm.box = "generic/centos7"
+
+  config.vm.provider "virtualbox" do |v|
+    v.name = "hello"
+    v.cpus = 4
+    v.memory = 4096
+    v.gui = false
+    v.linked_clone = true
+    v.customize ["modifyvm", :id, "--natdnshostresolver1", "on"]
+    v.customize ["modifyvm", :id, "--audio", "none"]
+  end
+
+  config.vm.define "hello" do |hello|
+    hello.vm.hostname = "hello"
+    hello.vm.network :private_network, ip: $node_ip, virtualbox__intnet: true
+
+
+    hello.vm.synced_folder "./filebeat", "/home/vagrant/filebeat"
+    hello.vm.synced_folder "./logstash", "/home/vagrant/logstash"
+    hello.vm.synced_folder "./docker", "/home/vagrant/docker"
+
+    hello.vm.provision 'shell', path: 'prepare.sh'
+    hello.vm.provision 'shell', path: 'install-java.sh'
+    hello.vm.provision 'shell', path: 'install-gradle.sh'
+
+
+    #hello.vm.provision 'shell', path: 'install-docker.sh'  ## see hello.vm.provision :docker
+    hello.vm.provision :docker do |d|
+      d.post_install_provision :shell, path: 'docker/daemon.sh'
+      d.run "ubuntu",
+        cmd: 'echo hello!',
+        args: '-d --name hello --restart no'
+    end
+
+
+    hello.vm.network "forwarded_port", guest: 5601, host: 5601 ## for kibana
+
+    #hello.vm.provision :docker_compose, yml:"/home/vagrant/docker/kafka/docker-compose-single-broker.yml", run:"always"
+    #hello.vm.provision :docker_compose, yml:"/home/vagrant/docker/es-kibana/docker-compose.yml", run:"always"
+
+  end
+
+end
